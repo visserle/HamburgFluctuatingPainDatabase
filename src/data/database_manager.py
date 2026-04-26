@@ -1,0 +1,511 @@
+import argparse
+import logging
+
+import duckdb
+import polars as pl
+from polars import col
+
+from src.data.data_config import DataConfig
+from src.data.data_processing import (
+    create_calibration_results_df,
+    create_explore_data_df,
+    create_feature_data_df,
+    create_questionnaire_df,
+    merge_and_label_data_dfs,
+    remove_trials_with_thermode_or_rating_issues,
+)
+from src.data.database_schema import DatabaseSchema
+
+DB_FILE = DataConfig.DB_FILE
+NUM_PARTICIPANTS = DataConfig.NUM_PARTICIPANTS
+MODALITIES = DataConfig.MODALITIES
+QUESTIONNAIRES = DataConfig.QUESTIONNAIRES
+
+
+logger = logging.getLogger(__name__.rsplit(".", maxsplit=1)[-1])
+
+
+class DatabaseManager:
+    """
+    Database manager for the experiment data.
+
+    Note that DuckDB and Polars share the same memory space, so it is possible to
+    pass Polars DataFrames to DuckDB queries. As the data is highly compressed by Apache
+    Arrow, for each processing step, all modalities are loaded into memory at once,
+    processed, and then inserted into the database.
+
+    DuckDB allows only one connection at a time, so the usage as a context manager is
+    recommended.
+
+    Example usage:
+    ```python
+    db = DatabaseManager()
+    with db:
+        df = db.execute("SELECT * FROM Trials_Info").pl()  # .pl() for Polars DataFrame
+        # or alternatively
+        df = db.get_trials("Trials_Info", exclude_problematic=True)
+        # Note that get_trials also can return trials from other tables, e.g. Feature_EEG
+    df.head()
+    ```
+    """
+
+    def __init__(self) -> None:
+        self.conn = None
+        self._initialize_tables()
+
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.disconnect()
+
+    @staticmethod
+    def _initialize_tables():
+        with duckdb.connect(DB_FILE.as_posix()) as conn:
+            DatabaseSchema.create_trials_info_table(conn)
+            DatabaseSchema.create_seeds_table(conn)
+
+    def connect(self) -> None:
+        if not self.conn:
+            self.conn = duckdb.connect(DB_FILE.as_posix())
+
+    def disconnect(self) -> None:
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+
+    def _ensure_connection(self) -> None:
+        """Helper method to check connection status."""
+        if self.conn is None:
+            raise ConnectionError(
+                "Database not connected. Use 'with' statement or call connect() first."
+            )
+
+    def execute(self, query: str) -> duckdb.DuckDBPyRelation:
+        """Execute a SQL query.
+
+        Note: Add a .pl() to the return value to get a Polars DataFrame, e.g.
+        `db.execute("SELECT * FROM Feature_EDA").pl()`."""
+        self._ensure_connection()
+        return self.conn.execute(query)
+
+    def sql(self, query: str) -> duckdb.DuckDBPyRelation:
+        """Run a SQL query. If it is a SELECT statement, create a relation object from
+        the given SQL query, otherwise run the query as-is. (see DuckDB docs)
+        """
+        self._ensure_connection()
+        return self.conn.sql(query)
+
+    def get_table(
+        self,
+        table_name: str,
+    ) -> pl.DataFrame:
+        """Return the full table as a Polars DataFrame.
+
+        For tables with time series data, one should always use the `get_trials` method
+        instead.
+
+        Args:
+            table_name: The name of the table to retrieve.
+        """
+        return self.execute(f"SELECT * FROM {table_name}").pl()
+
+    def get_trials(
+        self,
+        table_name: str,
+        exclude_problematic: bool | str | list[str],
+        participant_ids: list[int] | None = None,
+    ) -> pl.DataFrame:
+        """Return the trial data from a table as a Polars DataFrame.
+
+        Note that independent from addition to exclude_problematic,
+        we always remove trial that had rating or thermode issues, as these trials
+        are not valid for the experiment.
+
+        Args:
+            table_name: The name of the table to retrieve.
+            exclude_problematic:
+                - If True, excludes all trials with measurement problems.
+                - If a string, excludes only trials with problems in the specified modality (e.g., 'eeg').
+                - If a list of strings, excludes trials with problems in any of the specified modalities.
+                Modality matching is partial, so 'eeg' will match entries like 'eeg/eda'.
+                - If False, includes all trials.
+        """
+        participant_filter = (
+            "where participant_id in " + str(participant_ids) if participant_ids else ""
+        )
+        df = self.execute(
+            f"SELECT * FROM {table_name} {participant_filter}"
+        ).pl()  # could be more efficient by filtering out invalid trials in the query
+
+        # Remove inter-trial rows
+        df = df.filter(col("trial_id").is_not_null())
+
+        # Remove invalid trials
+        invalid_trials = self.execute("SELECT * FROM Invalid_Trials").pl()
+
+        # Always remove trials with thermode or rating issues
+        if "trial_number" in df.columns:
+            df = remove_trials_with_thermode_or_rating_issues(invalid_trials, df)
+
+        # Remove invalid trials if specified
+        # do not filter invalid trials from invalid_trials table, would be empty
+        if table_name == "invalid_trials":
+            return df
+
+        if exclude_problematic:
+            # Filter invalid trials by modality if a specific modality or list is specified
+            filtered_invalid_trials = invalid_trials
+
+            if isinstance(exclude_problematic, str):
+                # Single modality case
+                modality = exclude_problematic
+                filtered_invalid_trials = invalid_trials.filter(
+                    pl.col("modality").str.contains(modality)
+                )
+            elif isinstance(exclude_problematic, list):
+                # Multiple modalities case - create a filter condition for each modality
+                filter_conditions = [
+                    pl.col("modality").str.contains(mod) for mod in exclude_problematic
+                ]
+                # Combine conditions with logical OR
+                if filter_conditions:
+                    combined_filter = filter_conditions[0]
+                    for condition in filter_conditions[1:]:
+                        combined_filter = combined_filter | condition
+                    filtered_invalid_trials = invalid_trials.filter(combined_filter)
+
+            if "participant_id" in df.columns and "trial_number" in df.columns:
+                # Note that not every participant has 12 trials, so a filter using the
+                # trial_id would remove the wrong trials
+                df = df.filter(
+                    ~pl.struct(["participant_id", "trial_number"]).is_in(
+                        filtered_invalid_trials.select(
+                            ["participant_id", "trial_number"]
+                        )
+                        .unique()
+                        .to_struct()
+                    )
+                )
+            elif (
+                "participants" in table_name.lower()
+                or "questionnaire" in table_name.lower()
+                or "result" in table_name.lower()
+            ):
+                # remove participants that only have invalid trials
+                # (note that this is different from the invalid participants table)
+
+                # If filtering by modality, only consider trials with that modality
+                only_invalid_trials = (
+                    filtered_invalid_trials.group_by("participant_id")
+                    .agg(pl.len().alias("count"))
+                    .filter(pl.col("count") == 12)
+                    .get_column("participant_id")
+                )
+                df = df.filter(~pl.col("participant_id").is_in(only_invalid_trials))
+            else:  # not all tables have trial information, e.g. questionnaires
+                # no filtering necessary, invalid participants are already excluded
+                pass
+        return df
+
+    def table_exists(
+        self,
+        name: str,
+    ) -> bool:
+        return (
+            self.execute(f"""
+                SELECT COUNT(*) 
+                FROM information_schema.tables
+                WHERE table_name = '{name}'
+                """).fetchone()[0]
+            > 0
+        )
+
+    def participant_exists(
+        self,
+        participant_id: int,
+        table_name: str = "Trials_Info",
+    ) -> bool:
+        """Check if a participant exists in the database."""
+        # If they exist in Trials_Info, they exist in all raw data tables.
+        if "Raw" in table_name:
+            table_name = "Trials_Info"
+        if not self.table_exists(table_name):
+            return False
+        result = self.execute(
+            f"SELECT True FROM {table_name} WHERE participant_id = {participant_id} LIMIT 1"
+        ).fetchone()
+        return bool(result)
+
+    def ctas(
+        self,
+        table_name: str,
+        df: pl.DataFrame,
+    ) -> None:
+        """Create a table as select.
+
+        Most convenient way to create a table from a df, but does neither support
+        constraints nor altering the table afterwards.
+        (That is why we need to create the table schema manually and insert the data
+        afterwards for more complex tables, see DatabaseSchema.)
+        """
+        # DuckDB does not support hyphens in table names
+        table_name = table_name.replace("-", "_")
+
+        # Register the DataFrame explicitly first
+        self.conn.register("temp_df", df)
+        self.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM temp_df")
+        self.conn.unregister("temp_df")
+
+    def insert_trials_info_df(
+        self,
+        trials_info_df: pl.DataFrame,
+    ) -> None:
+        columns = ", ".join(trials_info_df.columns)
+        try:
+            self.conn.register("trials_info_df", trials_info_df)
+            self.execute(
+                f"INSERT INTO Trials_Info ({columns}) SELECT * FROM trials_info_df"
+            )
+            self.conn.unregister("trials_info_df")
+        except duckdb.ConstraintException as e:
+            logger.warning(f"Trial data already exists in the database: {e}")
+
+    def insert_raw_data(
+        self,
+        participant_id: int,
+        table_name: str,
+        raw_data_df: pl.DataFrame,
+    ) -> None:
+        DatabaseSchema.create_raw_data_table(
+            self.conn,
+            table_name,
+            raw_data_df.schema,
+        )
+        self.conn.register("raw_data_df", raw_data_df)
+        self.execute(f"""
+            INSERT INTO {table_name}
+            SELECT t.trial_id, r.*
+            FROM raw_data_df AS r
+            LEFT JOIN Trials_Info AS t -- left join to keep data that has no trial_id
+                ON r.trial_number = t.trial_number 
+                AND r.participant_id = t.participant_id
+            ORDER BY r.rownumber;
+        """)
+        self.conn.unregister("raw_data_df")
+
+    # Note that in constrast to raw data, feature-engineered data is
+    # not inserted into the database per participant, but per modality over all
+    # participants.
+    def insert_feature_data(
+        self,
+        table_name: str,
+        feature_data_df: pl.DataFrame,
+    ) -> None:
+        DatabaseSchema.create_feature_data_table(
+            self.conn,
+            table_name,
+            feature_data_df.schema,
+        )
+        self.conn.register("feature_data_df", feature_data_df)
+        self.execute(f"""
+            INSERT INTO {table_name}
+            SELECT *
+            FROM feature_data_df
+            ORDER BY participant_id, timestamp;
+        """)
+        self.conn.unregister("feature_data_df")
+
+    def insert_explore_data(
+        self,
+        table_name: str,
+        explore_data_df: pl.DataFrame,
+    ) -> None:
+        DatabaseSchema.create_explore_data_table(
+            self.conn,
+            table_name,
+            explore_data_df.schema,
+        )
+        self.conn.register("explore_data_df", explore_data_df)
+        self.execute(f"""
+            INSERT INTO {table_name}
+            SELECT *
+            FROM explore_data_df
+            ORDER BY participant_id, timestamp;
+        """)
+        self.conn.unregister("explore_data_df")
+
+
+def fill_and_anonymize_database(db: DatabaseManager) -> None:
+    """
+    Fill the database with raw data and anonymize it.
+
+    This step requires the original deanonymized data. Only runs if the database
+    file is smaller than 1MB (i.e., mostly empty).
+
+    Args:
+        db: DatabaseManager instance to use for database operations.
+    """
+    if DB_FILE.stat().st_size >= 1e6:
+        logger.debug("Database already filled, skipping initialization.")
+        return
+
+    with db:
+        # Participant data, experiment and questionnaire results
+        db.ctas("Invalid_Participants", DataConfig.load_invalid_participants_config())
+        db.ctas("Invalid_Trials", DataConfig.load_invalid_trials_config())
+        db.ctas("Calibration_Results", create_calibration_results_df())
+        for questionnaire in QUESTIONNAIRES:
+            df = create_questionnaire_df(questionnaire)
+            db.ctas("Questionnaire_" + questionnaire.upper(), df)
+        logger.info("Participant data inserted.")
+
+        # Raw data
+        for participant_id in range(1, NUM_PARTICIPANTS + 1):
+            if participant_id in (
+                db.execute("SELECT participant_id FROM Invalid_Participants")
+                .pl()  # returns a df
+                .to_series()
+                .to_list()
+            ):
+                logger.debug(f"Participant {participant_id} is invalid.")
+                continue
+            if db.participant_exists(participant_id):
+                logger.debug(
+                    f"Raw data for participant {participant_id} already exists."
+                )
+                continue
+
+            # Raw data loading (removed in minimal release as raw iMotions data is not provided)
+            # df = load_imotions_data_df(participant_id, "Trials_Info")
+            # trials_info_df = create_trials_info_df(participant_id, df)
+            # db.insert_trials_info_df(trials_info_df)
+
+            # for mod in MODALITIES:
+            #     df = load_imotions_data_df(participant_id, mod)
+            #     df = create_raw_data_df(participant_id, df, trials_info_df)
+            #     db.insert_raw_data(participant_id, "Raw_" + mod, df)
+            logger.debug(f"Raw data for participant {participant_id} skipped.")
+        logger.info("Raw data inserted.")
+
+    # Anonymize database (removed in minimal release)
+    # anonymize_db(db)
+    logger.info("Database initialization check complete.")
+
+
+def main(modality: str | None = None, table_type: str = "both"):
+    """
+    Main function for database creation and processing.
+
+    This function fills the database with raw data (if needed), then processes
+    it to create feature-engineered and exploratory data tables.
+
+    Args:
+        modality: Specific modality to process (e.g., 'EEG', 'EDA', etc.).
+                  If None, all modalities are processed.
+        table_type: Type of table to create ('feature', 'explore', or 'both').
+    """
+    db = DatabaseManager()
+
+    # Fill and anonymize database (requires original deanonymized data)
+    fill_and_anonymize_database(db)
+
+    # NOTE: From here on, you can use the pipeline without possessing the original, de-
+    # anonymized data.
+
+    # Determine which modalities to process
+    modalities_to_process = [modality] if modality else MODALITIES
+
+    logging.info("Starting data pipeline.")
+    with db:
+        # Feature-engineered data
+        if table_type in ("feature", "both"):
+            for mod in modalities_to_process:
+                table_name = f"Feature_{mod}"
+                logger.info(f"Processing {table_name}...")
+                df = db.get_table(f"Raw_{mod}")
+                df = create_feature_data_df(table_name, df)
+                db.insert_feature_data(table_name, df)
+            logger.info("Feature data created.")
+
+        # Exploratory data
+        if table_type in ("explore", "both"):
+            for mod in modalities_to_process:
+                if mod == "EEG":
+                    logging.debug("Skipping EEG exploratory data creation.")
+                    continue
+                table_name = f"Explore_{mod}"
+                logger.info(f"Processing {table_name}...")
+                df = db.get_table(f"Raw_{mod}")
+                df = create_explore_data_df(table_name, df)
+                db.insert_explore_data(table_name, df)
+            logger.info("Exploratory data created.")
+
+        # Merge data (trials only) and add labels
+        # Only merge if processing all modalities
+        if not modality:
+            data_dfs = []
+            data_dfs_explore = []
+            for mod in MODALITIES:
+                if mod == "EEG":
+                    continue  # no merge for EEG, different sampling rate
+                if table_type in ("feature", "both"):
+                    data_dfs.append(
+                        db.get_trials(f"Feature_{mod}", exclude_problematic=False)
+                    )
+                if table_type in ("explore", "both"):
+                    data_dfs_explore.append(
+                        db.get_trials(f"Explore_{mod}", exclude_problematic=False)
+                    )
+            trials_info_df = db.get_trials("Trials_Info", exclude_problematic=False)
+
+            if table_type in ("feature", "both") and data_dfs:
+                df = merge_and_label_data_dfs(data_dfs, trials_info_df)
+                db.ctas("Feature_Data", df)
+
+            if table_type in ("explore", "both") and data_dfs_explore:
+                df_explore = merge_and_label_data_dfs(data_dfs_explore, trials_info_df)
+                db.ctas("Explore_Data", df_explore)
+
+            logger.info("Feature and exploratory data tables created.")
+        else:
+            logger.info(
+                f"Skipped merging data tables (only processing modality: {modality})"
+            )
+
+    logger.info("Data pipeline completed.")
+
+
+if __name__ == "__main__":
+    import time
+
+    from src.log_config import configure_logging
+
+    configure_logging(stream_level=logging.DEBUG)
+
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="Process pain measurement data and populate the database."
+    )
+    parser.add_argument(
+        "--modality",
+        type=str,
+        default=None,
+        help="Specific modality to process (e.g., EEG, EDA, Face, EKG, Eye). "
+        "If not specified, all modalities are processed.",
+    )
+    parser.add_argument(
+        "--table",
+        type=str,
+        default="both",
+        choices=["feature", "explore", "both"],
+        help="Type of table to create: 'feature', 'explore', or 'both' (default: both).",
+    )
+
+    args = parser.parse_args()
+
+    start = time.time()
+    main(modality=args.modality, table_type=args.table)
+    end = time.time()
+    print(f"Runtime: {end - start:.2f} seconds.")
