@@ -7,10 +7,8 @@ from polars import col
 
 from src.data.data_config import DataConfig
 from src.data.data_processing import (
-    create_calibration_results_df,
     create_explore_data_df,
     create_feature_data_df,
-    create_questionnaire_df,
     merge_and_label_data_dfs,
     remove_trials_with_thermode_or_rating_issues,
 )
@@ -337,63 +335,6 @@ class DatabaseManager:
         self.conn.unregister("explore_data_df")
 
 
-def fill_and_anonymize_database(db: DatabaseManager) -> None:
-    """
-    Fill the database with raw data and anonymize it.
-
-    This step requires the original deanonymized data. Only runs if the database
-    file is smaller than 1MB (i.e., mostly empty).
-
-    Args:
-        db: DatabaseManager instance to use for database operations.
-    """
-    if DB_FILE.stat().st_size >= 1e6:
-        logger.debug("Database already filled, skipping initialization.")
-        return
-
-    with db:
-        # Participant data, experiment and questionnaire results
-        db.ctas("Invalid_Participants", DataConfig.load_invalid_participants_config())
-        db.ctas("Invalid_Trials", DataConfig.load_invalid_trials_config())
-        db.ctas("Calibration_Results", create_calibration_results_df())
-        for questionnaire in QUESTIONNAIRES:
-            df = create_questionnaire_df(questionnaire)
-            db.ctas("Questionnaire_" + questionnaire.upper(), df)
-        logger.info("Participant data inserted.")
-
-        # Raw data
-        for participant_id in range(1, NUM_PARTICIPANTS + 1):
-            if participant_id in (
-                db.execute("SELECT participant_id FROM Invalid_Participants")
-                .pl()  # returns a df
-                .to_series()
-                .to_list()
-            ):
-                logger.debug(f"Participant {participant_id} is invalid.")
-                continue
-            if db.participant_exists(participant_id):
-                logger.debug(
-                    f"Raw data for participant {participant_id} already exists."
-                )
-                continue
-
-            # Raw data loading (removed in minimal release as raw iMotions data is not provided)
-            # df = load_imotions_data_df(participant_id, "Trials_Info")
-            # trials_info_df = create_trials_info_df(participant_id, df)
-            # db.insert_trials_info_df(trials_info_df)
-
-            # for mod in MODALITIES:
-            #     df = load_imotions_data_df(participant_id, mod)
-            #     df = create_raw_data_df(participant_id, df, trials_info_df)
-            #     db.insert_raw_data(participant_id, "Raw_" + mod, df)
-            logger.debug(f"Raw data for participant {participant_id} skipped.")
-        logger.info("Raw data inserted.")
-
-    # Anonymize database (removed in minimal release)
-    # anonymize_db(db)
-    logger.info("Database initialization check complete.")
-
-
 def main(modality: str | None = None, table_type: str = "both"):
     """
     Main function for database creation and processing.
@@ -407,12 +348,6 @@ def main(modality: str | None = None, table_type: str = "both"):
         table_type: Type of table to create ('feature', 'explore', or 'both').
     """
     db = DatabaseManager()
-
-    # Fill and anonymize database (requires original deanonymized data)
-    fill_and_anonymize_database(db)
-
-    # NOTE: From here on, you can use the pipeline without possessing the original, de-
-    # anonymized data.
 
     # Determine which modalities to process
     modalities_to_process = [modality] if modality else MODALITIES

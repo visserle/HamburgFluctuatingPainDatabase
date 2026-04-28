@@ -2,7 +2,7 @@
 
 This repository contains the source code for data accessing and data transformation utilities for the Hamburg Pain Database.
 
-The codebase provides an API to the DuckDB database, containing the experimental data and physiological signals (EEG, EDA, Heart Rate, Pupil Diameter, and Facial Expressions). 
+The codebase provides an API to the DuckDB database, containing the experimental data and physiological signals (EEG, EDA, Heart Rate, Pupil Diameter, and Facial Expressions).
 
 ## Repository Structure
 
@@ -37,19 +37,22 @@ conda activate pain
 
 ## Usage
 
-The project uses a local DuckDB database for efficient data querying. You can interact with it using the provided `DatabaseManager`:
+The project uses a local DuckDB database for efficient data querying. Most users will
+want to open it in read-only mode:
 
 ```python
 from src.data.database_manager import DatabaseManager
 
-db = DatabaseManager()
+db = DatabaseManager(read_only=True)
 with db:
     # Retrieve preprocessed feature data, automatically filtering invalid trials
     df = db.get_trials("Feature_Data", exclude_problematic=True)
     
     # Or execute direct SQL queries
-    participant_info = db.execute("SELECT * FROM Participants_Info").pl()
+    panas = db.execute("SELECT * FROM Questionnaire_PANAS LIMIT 5").pl()
 ```
+
+For a worked example, see [notebooks/quickstart.ipynb](notebooks/quickstart.ipynb).
 
 ## Contact
 

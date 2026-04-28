@@ -2,18 +2,19 @@ from pathlib import Path
 
 import polars as pl
 import tomllib
-import yaml
 
 
 class DataConfig:
-    DB_FILE = Path("pain-measurement.duckdb")
+    ROOT = Path(__file__).resolve().parents[2]
+
+    DB_FILE = ROOT / "pain-measurement.duckdb"
 
     MODALITIES = ["Stimulus", "EDA", "EEG", "HR", "Pupil", "Face"]
 
     NUM_PARTICIPANTS = 50
-    INVALID_PARTICIPANTS_FILE = Path("src/data/invalid_participants.csv")
-    INVALID_TRIALS_FILE = Path("src/data/invalid_trials.csv")
-    CALIBRATION_RESULTS_FILE = Path("data/experiments/calibration_results.csv")
+    INVALID_PARTICIPANTS_FILE = ROOT / "src/data/invalid_participants.csv"
+    INVALID_TRIALS_FILE = ROOT / "src/data/invalid_trials.csv"
+    CALIBRATION_RESULTS_FILE = ROOT / "data/experiments/calibration_results.csv"
 
     QUESTIONNAIRES = [
         # same as in src/experiments/questionnaires/app.py
@@ -26,13 +27,8 @@ class DataConfig:
         "stai-t-10",
         "maas",
     ]
-    QUESTIONNAIRES_DATA_PATH = Path("data/experiments/questionnaires")
-    STIMULUS_CONFIG_PATH = Path("src/data/stimulus_config.toml")
-
-    @classmethod
-    def load_imotions_config(cls):
-        with open(cls.IMOTIONS_DATA_CONFIG_FILE, "r") as file:
-            return yaml.safe_load(file)
+    QUESTIONNAIRES_DATA_PATH = ROOT / "data/experiments/questionnaires"
+    STIMULUS_CONFIG_PATH = ROOT / "src/data/stimulus_config.toml"
 
     @classmethod
     def load_stimulus_config(cls):
