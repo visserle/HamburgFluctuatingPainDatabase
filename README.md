@@ -1,6 +1,6 @@
-# Hamburg Pain Database
+# Hamburg Fluctuating Pain Database
 
-This repository contains the source code for data accessing and data transformation utilities for the Hamburg Pain Database.
+This repository contains the source code for data accessing and data transformation utilities for the Hamburg Fluctuating Pain Database.
 
 The codebase provides an API to the DuckDB database, containing the experimental data and physiological signals (EEG, EDA, Heart Rate, Pupil Diameter, and Facial Expressions).
 
@@ -25,9 +25,11 @@ The codebase provides an API to the DuckDB database, containing the experimental
 
 1. Clone the repository and navigate into it:
 ```bash
-git clone https://github.com/visserle/pain-measurement.git
+git clone https://github.com/visserle/HamburgFluctuatingPainDataset.git
 cd pain-measurement
 ```
+
+#TODO add figshare download
 
 2. Create and activate the conda environment using the provided `requirements.yaml`:
 ```bash
