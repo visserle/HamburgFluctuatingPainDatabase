@@ -47,6 +47,7 @@ class DatabaseManager:
 
     def __init__(self) -> None:
         self.conn = None
+        DataConfig.require_database_file()
         self._initialize_tables()
 
     def __enter__(self):
@@ -58,12 +59,14 @@ class DatabaseManager:
 
     @staticmethod
     def _initialize_tables():
+        DataConfig.require_database_file()
         with duckdb.connect(DB_FILE.as_posix()) as conn:
             DatabaseSchema.create_trials_info_table(conn)
             DatabaseSchema.create_seeds_table(conn)
 
     def connect(self) -> None:
         if not self.conn:
+            DataConfig.require_database_file()
             self.conn = duckdb.connect(DB_FILE.as_posix())
 
     def disconnect(self) -> None:
