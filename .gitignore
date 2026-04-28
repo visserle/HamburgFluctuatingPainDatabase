@@ -1,13 +1,5 @@
-# Log and raw, unanonymized data files
-/runs
-/data
-src/data/participants.json
-src/data/invalid_trials*
-src/data/invalid_participants.csv
-Experiment.duckdb.tmp
-reports/
-db.sqlite3
 *.duckdb
+README_figshare.md
 
 # Licensed questionnaires
 src/experiments/questionnaires/archive
@@ -106,4 +98,3 @@ target/
 
 # Mypy cache
 .mypy_cache/
-_stuff.ipynb
