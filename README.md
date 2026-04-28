@@ -1,8 +1,9 @@
 # Hamburg Fluctuating Pain Database
 
-This repository contains the source code for data accessing and data transformation utilities for the Hamburg Fluctuating Pain Database.
+This repository provides an API to the DuckDB database of the Hamburg Fluctuating Pain Dataset. The database encompasses behavioural and physiological recordings (EEG, EDA, heart rate, pupil diameter, facial expressions, pain ratings) during tonic fluctuating heat pain in healthy adults (n = 45). 
 
-The codebase provides an API to the DuckDB database, containing the experimental data and physiological signals (EEG, EDA, Heart Rate, Pupil Diameter, and Facial Expressions).
+> [!NOTE]
+> The database file is not included in the repository due to its size (∼ 8 GB; 27 hours of time series data). Please use the `download_database.py` script or download it manually from the companion [Figshare](https://doi.org/10.6084/m9.figshare.32112442) record and place it in the repository root.
 
 ## Repository Structure
 
@@ -16,22 +17,20 @@ The codebase provides an API to the DuckDB database, containing the experimental
 
 ## Installation
 
-### Prerequisites
-
--   **Python**: ≥ 3.12
--   **Conda**: Recommended for environment management
-
-### Setup
+Requires Python ≥ 3.12 and Conda for environment management.
 
 1. Clone the repository and navigate into it:
 ```bash
 git clone https://github.com/visserle/HamburgFluctuatingPainDataset.git
-cd pain-measurement
+cd HamburgFluctuatingPainDataset
 ```
 
-#TODO add figshare download
+2. Download the DuckDB database:
+```bash
+python3 download_database.py
+```
 
-2. Create and activate the conda environment using the provided `requirements.yaml`:
+3. Create and activate the conda environment using the provided `requirements.yaml`:
 ```bash
 conda env create -f requirements.yaml
 conda activate pain
@@ -39,13 +38,12 @@ conda activate pain
 
 ## Usage
 
-The project uses a local DuckDB database for efficient data querying. Most users will
-want to open it in read-only mode:
+The project uses a local DuckDB database for efficient data querying. Most users will want to open it in read-only mode:
 
 ```python
 from src.data.database_manager import DatabaseManager
 
-db = DatabaseManager(read_only=True)
+db = DatabaseManager()
 with db:
     # Retrieve preprocessed feature data, automatically filtering invalid trials
     df = db.get_trials("Feature_Data", exclude_problematic=True)
@@ -54,8 +52,7 @@ with db:
     panas = db.execute("SELECT * FROM Questionnaire_PANAS LIMIT 5").pl()
 ```
 
-A minimal end-to-end example is available in
-[notebooks/quickstart.ipynb](notebooks/quickstart.ipynb).
+A minimal end-to-end example is available in [notebooks/quickstart.ipynb](notebooks/quickstart.ipynb).
 
 ## Contact
 
