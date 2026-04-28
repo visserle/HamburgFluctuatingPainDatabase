@@ -30,52 +30,7 @@ from src.features.resampling import (
 from src.features.stimulus import feature_stimulus
 from src.features.transforming import merge_dfs
 
-INVALID_PARTICIPANTS = (
-    DataConfig.load_invalid_participants_config().get_column("participant_id").to_list()
-)
-
 logger = logging.getLogger(__name__.rsplit(".", maxsplit=1)[-1])
-
-
-def create_calibration_results_df():
-    return (
-        pl.read_csv(DataConfig.CALIBRATION_RESULTS_FILE)
-        .rename({"id": "participant_id"})
-        .drop("preexposure_painful", "vas0_temps", "vas70_temps")  # can be found in log
-        .filter(~col("participant_id").is_in(INVALID_PARTICIPANTS))
-    )
-
-
-def create_questionnaire_df(questionnaire: str):
-    questionnaire_df = pl.read_csv(
-        DataConfig.QUESTIONNAIRES_DATA_PATH / (questionnaire + "_results.csv")
-    )
-    # rename the id column to participant_id for consistency
-    questionnaire_df = questionnaire_df.rename({"id": "participant_id"})
-    # add a column for the questionnaire name
-    questionnaire_df.insert_column(0, pl.lit(questionnaire).alias("questionnaire"))
-
-    # remove particpants from PANAS that did not complete all trials because of thermode
-    # issues (important for pre post comparison)
-    if questionnaire == "PANAS":
-        participants_with_thermode_issues = (
-            (
-                DataConfig.load_invalid_trials_config()
-                .with_columns(
-                    (col("modality").str.count_matches("thermode"))
-                    .alias("issue_thermode")
-                    .cast(pl.Boolean)
-                )
-                .filter(col("issue_thermode"))
-            )
-            .get_column("participant_id")
-            .unique()
-            .to_list()
-        )
-        questionnaire_df = questionnaire_df.filter(
-            ~col("participant_id").is_in(participants_with_thermode_issues)
-        )
-    return questionnaire_df.filter(~col("participant_id").is_in(INVALID_PARTICIPANTS))
 
 
 def create_seeds_df():

@@ -15,9 +15,7 @@ from src.data.data_processing import (
 from src.data.database_schema import DatabaseSchema
 
 DB_FILE = DataConfig.DB_FILE
-NUM_PARTICIPANTS = DataConfig.NUM_PARTICIPANTS
 MODALITIES = DataConfig.MODALITIES
-QUESTIONNAIRES = DataConfig.QUESTIONNAIRES
 
 
 logger = logging.getLogger(__name__.rsplit(".", maxsplit=1)[-1])

@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - anyio=4.9.0=pyh29332c3_0
+  - altair=5.5.0=pyhd8ed1ab_1
   - arrow=1.3.0=pyhd8ed1ab_1
   - asttokens=3.0.0=pyhd8ed1ab_1
   - async-lru=2.0.5=pyh29332c3_0
@@ -127,7 +128,6 @@ dependencies:
   - libgfortran5=14.2.0=h2c44a93_105
   - libgoogle-cloud=2.36.0=h9484b08_1
   - libgoogle-cloud-storage=2.36.0=h7081f7f_1
-  - google-cloud-texttospeech=2.18.2=pyhd8ed1ab_0
   - libgrpc=1.71.0=hf667ad3_0
   - libiconv=1.18=hfe07756_1
   - libjpeg-turbo=3.0.0=hb547adb_1
@@ -153,6 +153,7 @@ dependencies:
   - libzlib=1.3.1=h8359307_2
   - linkify-it-py=2.0.3=pyhd8ed1ab_1
   - llvm-openmp=20.1.3=hdb05f8b_0
+  - lxml=5.4.0=py312hc2c121e_0
   - lz4-c=1.10.0=h286801f_1
   - mako=1.3.10=pyhd8ed1ab_0
   - markdown=3.8=pyhd8ed1ab_0
@@ -288,4 +289,3 @@ dependencies:
   - zlib=1.3.1=h8359307_2
   - zstandard=0.23.0=py312hea69d52_1
   - zstd=1.5.7=h6491c7d_2
-prefix: /Users/visser/miniforge3/envs/pain

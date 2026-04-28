@@ -52,7 +52,8 @@ with db:
     panas = db.execute("SELECT * FROM Questionnaire_PANAS LIMIT 5").pl()
 ```
 
-For a worked example, see [notebooks/quickstart.ipynb](notebooks/quickstart.ipynb).
+A minimal end-to-end example is available in
+[notebooks/quickstart.ipynb](notebooks/quickstart.ipynb).
 
 ## Contact
 
