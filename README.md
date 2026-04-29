@@ -1,6 +1,6 @@
 # Hamburg Fluctuating Pain Database
 
-This repository provides an API to the DuckDB database of the Hamburg Fluctuating Pain Database. The database encompasses behavioural and physiological recordings (EEG, EDA, heart rate, pupil diameter, facial expressions, pain ratings) during tonic fluctuating heat pain in healthy adults (n = 45). 
+This repository provides an API to the Hamburg Fluctuating Pain Database. The DuckDB database encompasses behavioural and physiological recordings (EEG, EDA, heart rate, pupil diameter, facial expressions, pain ratings) during tonic fluctuating heat pain in healthy adults (n = 45).
 
 > [!NOTE]
 > #TODO: Add reference to the associated publication once available.
