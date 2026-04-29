@@ -27,13 +27,15 @@ def build_request(url: str) -> urllib.request.Request:
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": "HamburgFluctuatingPainDataset downloader",
+            "User-Agent": "HamburgFluctuatingPainDatabase downloader",
         },
     )
 
 
 def fetch_article_metadata(timeout: float) -> dict:
-    with urllib.request.urlopen(build_request(ARTICLE_URL), timeout=timeout) as response:
+    with urllib.request.urlopen(
+        build_request(ARTICLE_URL), timeout=timeout
+    ) as response:
         return json.load(response)
 
 
@@ -99,7 +101,7 @@ def render_progress(bytes_downloaded: int, total_size: int) -> str:
 def download_file(url: str, destination: Path, timeout: float) -> None:
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "HamburgFluctuatingPainDataset downloader"},
+        headers={"User-Agent": "HamburgFluctuatingPainDatabase downloader"},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         total_size = int(response.headers.get("Content-Length", "0"))
@@ -141,7 +143,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Download the DuckDB database from the Hamburg Fluctuating Pain "
-            "Dataset Figshare record into the repository root."
+            "Database Figshare record into the repository root."
         )
     )
     parser.add_argument(

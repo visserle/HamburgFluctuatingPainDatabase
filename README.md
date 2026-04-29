@@ -1,6 +1,6 @@
 # Hamburg Fluctuating Pain Database
 
-This repository provides an API to the DuckDB database of the Hamburg Fluctuating Pain Dataset. The database encompasses behavioural and physiological recordings (EEG, EDA, heart rate, pupil diameter, facial expressions, pain ratings) during tonic fluctuating heat pain in healthy adults (n = 45). 
+This repository provides an API to the DuckDB database of the Hamburg Fluctuating Pain Database. The database encompasses behavioural and physiological recordings (EEG, EDA, heart rate, pupil diameter, facial expressions, pain ratings) during tonic fluctuating heat pain in healthy adults (n = 45). 
 
 > [!NOTE]
 > #TODO: Add reference to the associated publication once available.
@@ -14,8 +14,8 @@ Requires Python ≥ 3.12 and Conda for environment management.
 
 1. Clone the repository and navigate into it:
 ```bash
-git clone https://github.com/visserle/HamburgFluctuatingPainDataset.git
-cd HamburgFluctuatingPainDataset
+git clone https://github.com/visserle/HamburgFluctuatingPainDatabase.git
+cd HamburgFluctuatingPainDatabase
 ```
 
 2. Download the DuckDB database:
@@ -71,4 +71,4 @@ For further information, please refer to the original paper, the READMEs in the 
 
 ## Contact
 
-For questions regarding the code or dataset, please open an issue or contact the corresponding author.
+For questions regarding the code or database, please open an issue or contact the corresponding author.
