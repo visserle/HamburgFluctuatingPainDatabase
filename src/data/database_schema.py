@@ -52,23 +52,6 @@ class DatabaseSchema:
             conn.execute("CREATE TABLE Seeds AS SELECT * FROM seeds_data")
 
     @staticmethod
-    def create_raw_data_table(
-        conn: duckdb.DuckDBPyConnection,
-        name: str,
-        schema: pl.Schema,
-    ) -> None:
-        conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS {name} (
-                trial_id USMALLINT,
-                {map_polars_schema_to_duckdb(schema)},
-                UNIQUE (trial_id, rownumber)
-            );
-        """)
-        logger.debug(f"Created table '{name}'.") if not DatabaseSchema.table_exists(
-            conn, name
-        ) else None
-
-    @staticmethod
     def create_feature_data_table(
         conn: duckdb.DuckDBPyConnection,
         name: str,
@@ -77,7 +60,7 @@ class DatabaseSchema:
         conn.execute(f"""
             CREATE OR REPLACE TABLE {name} (
                 {map_polars_schema_to_duckdb(schema)},
-                UNIQUE (trial_id, timestamp)  -- we removed rownumber before
+                UNIQUE (trial_id, timestamp)
             );
         """)
         logger.debug(f"Created table '{name}'.")

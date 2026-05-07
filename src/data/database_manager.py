@@ -271,29 +271,6 @@ class DatabaseManager:
         except duckdb.ConstraintException as e:
             logger.warning(f"Trial data already exists in the database: {e}")
 
-    def insert_raw_data(
-        self,
-        participant_id: int,
-        table_name: str,
-        raw_data_df: pl.DataFrame,
-    ) -> None:
-        DatabaseSchema.create_raw_data_table(
-            self.conn,
-            table_name,
-            raw_data_df.schema,
-        )
-        self.conn.register("raw_data_df", raw_data_df)
-        self.execute(f"""
-            INSERT INTO {table_name}
-            SELECT t.trial_id, r.*
-            FROM raw_data_df AS r
-            LEFT JOIN Trials_Info AS t -- left join to keep data that has no trial_id
-                ON r.trial_number = t.trial_number 
-                AND r.participant_id = t.participant_id
-            ORDER BY r.rownumber;
-        """)
-        self.conn.unregister("raw_data_df")
-
     # Note that in constrast to raw data, feature-engineered data is
     # not inserted into the database per participant, but per modality over all
     # participants.
