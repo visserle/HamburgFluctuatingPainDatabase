@@ -6,7 +6,7 @@ This repository provides an API to the Hamburg Fluctuating Pain Database. The Du
 > #TODO: Add reference to the associated publication once available.
 
 > [!TIP]
-> The database file is not included in the repository due to its size (∼ 8 GB; 27 hours of time series data). Please use the `download_database.py` script or download it manually from the companion [Figshare](https://doi.org/10.6084/m9.figshare.32112442) record and place it in the repository root.
+> The database file is not included in the repository due to its size (∼ 8 GB; 27 hours of time series data). Please use the `download_database.py` script or download it manually from the companion [Figshare](https://doi.org/10.6084/m9.figshare.32207190) record and place it in the repository root.
 
 ## Setup
 
