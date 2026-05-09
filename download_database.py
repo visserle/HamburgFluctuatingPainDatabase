@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ARTICLE_ID = 32112442
+ARTICLE_ID = 32207190
 ARTICLE_URL = f"https://api.figshare.com/v2/articles/{ARTICLE_ID}"
 DATABASE_NAME = "pain-measurement.duckdb"
 ROOT = Path(__file__).resolve().parent
