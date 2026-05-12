@@ -25,6 +25,9 @@ cd HamburgFluctuatingPainDatabase
 python3 download_database.py
 ```
 
+> [!NOTE]
+> #TODO: Not available yet, use the private link to the figshare repository for manual download.
+
 3. Create and activate the conda environment using the provided `requirements.yaml`:
 ```bash
 conda env create -f requirements.yaml
